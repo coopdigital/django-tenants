@@ -3,7 +3,7 @@ from django.db import connection
 from django.test import TransactionTestCase
 from django.test.utils import override_settings
 
-from django_tenants.utils import get_public_schema_name
+from django_tenants.utils import get_public_role_name
 
 
 class TestSettings(TransactionTestCase):
@@ -12,6 +12,6 @@ class TestSettings(TransactionTestCase):
         del apps.all_models['django_tenants']
         c = connection.cursor()
         c.execute('DROP SCHEMA {0} CASCADE; CREATE SCHEMA {0};'.format(
-            get_public_schema_name()
+            get_public_role_name()
         ))
         apps.set_installed_apps(['customers', 'django_tenants'])

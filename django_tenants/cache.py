@@ -6,9 +6,9 @@ def make_key(key, key_prefix, version):
     Tenant aware function to generate a cache key.
 
     Constructs the key used by all other methods. Prepends the tenant
-    `schema_name` and `key_prefix'.
+    `role_name` and `key_prefix'.
     """
-    return '%s:%s:%s:%s' % (connection.schema_name, key_prefix, version, key)
+    return '%s:%s:%s:%s' % (connection.role_name, key_prefix, version, key)
 
 
 def reverse_key(key):

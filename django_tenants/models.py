@@ -5,10 +5,10 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.core.urlresolvers import reverse
 
 # noinspection PyProtectedMember
-from .postgresql_backend.base import _check_schema_name
+from .postgresql_backend.base import _check_role_name
 from .signals import post_schema_sync, schema_needs_to_be_sync
 from .utils import schema_exists, get_tenant_domain_model
-from .utils import get_public_schema_name
+from .utils import get_public_role_name
 
 
 class TenantMixin(models.Model):
@@ -29,8 +29,8 @@ class TenantMixin(models.Model):
     to be automatically created upon save.
     """
 
-    schema_name = models.CharField(max_length=63, unique=True,
-                                   validators=[_check_schema_name])
+    role_name = models.CharField(max_length=63, unique=True,
+                                   validators=[_check_role_name])
 
     domain_url = None
     """
@@ -74,33 +74,33 @@ class TenantMixin(models.Model):
             # or simpler
             Tenant.deactivate()
         """
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
 
     def save(self, verbosity=1, *args, **kwargs):
-        is_new = self.pk is None
-        has_schema = hasattr(connection, 'schema_name')
-        if has_schema and is_new and connection.schema_name != get_public_schema_name():
-            raise Exception("Can't create tenant outside the public schema. "
-                            "Current schema is %s." % connection.schema_name)
-        elif has_schema and not is_new and connection.schema_name not in (self.schema_name, get_public_schema_name()):
-            raise Exception("Can't update tenant outside it's own schema or "
-                            "the public schema. Current schema is %s."
-                            % connection.schema_name)
+       # is_new = self.pk is None
+       # has_schema = hasattr(connection, 'schema_name')
+       # if has_schema and is_new and connection.schema_name != get_public_schema_name():
+       #     raise Exception("Can't create tenant outside the public schema. "
+       #                     "Current schema is %s." % connection.schema_name)
+       # elif has_schema and not is_new and connection.schema_name not in (self.schema_name, get_public_schema_name()):
+       #     raise Exception("Can't update tenant outside it's own schema or "
+       #                     "the public schema. Current schema is %s."
+       #                     % connection.schema_name)
 
-        super(TenantMixin, self).save(*args, **kwargs)
+       super(TenantMixin, self).save(*args, **kwargs)
 
-        if has_schema and is_new and self.auto_create_schema:
-            try:
-                self.create_schema(check_if_exists=True, verbosity=verbosity)
-                post_schema_sync.send(sender=TenantMixin, tenant=self)
-            except Exception as e:
-                # We failed creating the tenant, delete what we created and
-                # re-raise the exception
-                self.delete(force_drop=True)
-                raise
-        elif is_new:
-            # although we are not using the schema functions directly, the signal might be registered by a listener
-            schema_needs_to_be_sync.send(sender=TenantMixin, tenant=self)
+       # if has_schema and is_new and self.auto_create_schema:
+       #     try:
+       #         self.create_schema(check_if_exists=True, verbosity=verbosity)
+       #         post_schema_sync.send(sender=TenantMixin, tenant=self)
+       #     except Exception as e:
+       #         # We failed creating the tenant, delete what we created and
+       #         # re-raise the exception
+       #         self.delete(force_drop=True)
+       #         raise
+       # elif is_new:
+       #     # although we are not using the schema functions directly, the signal might be registered by a listener
+       #     schema_needs_to_be_sync.send(sender=TenantMixin, tenant=self)
 
     def delete(self, force_drop=False, *args, **kwargs):
         """

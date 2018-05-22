@@ -28,9 +28,9 @@ class TenantSyncRouter(object):
         # the imports below need to be done here else django <1.5 goes crazy
         # https://code.djangoproject.com/ticket/20704
         from django.db import connection
-        from django_tenants.utils import get_public_schema_name
+        from django_tenants.utils import get_public_role_name
 
-        if connection.schema_name == get_public_schema_name():
+        if connection.role_name == get_public_role_name():
             if not self.app_in_list(app_label, settings.SHARED_APPS):
                 return False
         else:

@@ -12,14 +12,14 @@ from django.core import mail
 
 
 @contextmanager
-def schema_context(schema_name):
+def role_context(role_name):
     previous_tenant = connection.tenant
     try:
-        connection.set_schema(schema_name)
+        connection.set_role(role_name)
         yield
     finally:
         if previous_tenant is None:
-            connection.set_schema_to_public()
+            connection.set_role_to_public()
         else:
             connection.set_tenant(previous_tenant)
 
@@ -32,7 +32,7 @@ def tenant_context(tenant):
         yield
     finally:
         if previous_tenant is None:
-            connection.set_schema_to_public()
+            connection.set_role_to_public()
         else:
             connection.set_tenant(previous_tenant)
 
@@ -45,8 +45,8 @@ def get_tenant_domain_model():
     return get_model(settings.TENANT_DOMAIN_MODEL)
 
 
-def get_public_schema_name():
-    return getattr(settings, 'PUBLIC_SCHEMA_NAME', 'public')
+def get_public_role_name():
+    return getattr(settings, 'PUBLIC_ROLE_NAME', 'PUBLIC')
 
 
 def get_limit_set_calls():

@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.apps import AppConfig
 from django.core.exceptions import ImproperlyConfigured
-from django_tenants.utils import get_public_schema_name, get_tenant_model
+from django_tenants.utils import get_public_role_name, get_tenant_model
 
 
 recommended_config = """
@@ -24,10 +24,6 @@ class DjangoTenantsConfig(AppConfig):
         if not hasattr(settings, 'TENANT_APPS'):
             raise ImproperlyConfigured('TENANT_APPS setting not set')
 
-        if not settings.TENANT_APPS:
-            raise ImproperlyConfigured("TENANT_APPS is empty. "
-                                       "Maybe you don't need this app?")
-
         if not hasattr(settings, 'TENANT_MODEL'):
             raise ImproperlyConfigured('TENANT_MODEL setting not set')
 
@@ -36,10 +32,10 @@ class DjangoTenantsConfig(AppConfig):
                                        "'django_tenants.routers.TenantSyncRouter'.")
 
         if hasattr(settings, 'PG_EXTRA_SEARCH_PATHS'):
-            if get_public_schema_name() in settings.PG_EXTRA_SEARCH_PATHS:
+            if get_public_role_name() in settings.PG_EXTRA_SEARCH_PATHS:
                 raise ImproperlyConfigured(
                     "%s can not be included on PG_EXTRA_SEARCH_PATHS."
-                    % get_public_schema_name())
+                    % get_public_role_name())
 
             # make sure no tenant schema is in settings.PG_EXTRA_SEARCH_PATHS
 

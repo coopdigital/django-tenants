@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.http import Http404
-from django_tenants.utils import remove_www, get_public_schema_name, get_tenant_domain_model
+from django_tenants.utils import remove_www, get_public_role_name, get_tenant_domain_model
 import django
 
 if django.VERSION >= (1, 10, 0):
@@ -15,7 +15,7 @@ class TenantMainMiddleware(MIDDLEWARE_MIXIN):
     TENANT_NOT_FOUND_EXCEPTION = Http404
     """
     This middleware should be placed at the very top of the middleware stack.
-    Selects the proper database schema using the request host. Can fail in
+    Selects the proper database role using the request host. Can fail in
     various ways which is better than corrupting or revealing data.
     """
 
@@ -24,6 +24,7 @@ class TenantMainMiddleware(MIDDLEWARE_MIXIN):
         """ Extracts hostname from request. Used for custom requests filtering.
             By default removes the request's port and common prefixes.
         """
+        # TODO: Move to utils and replace implementation with urllib.parse
         return remove_www(request.get_host().split(':')[0])
 
     def get_tenant(self, domain_model, hostname):
@@ -31,9 +32,8 @@ class TenantMainMiddleware(MIDDLEWARE_MIXIN):
         return domain.tenant
 
     def process_request(self, request):
-        # Connection needs first to be at the public schema, as this is where
-        # the tenant metadata is stored.
-        connection.set_schema_to_public()
+        # Connection needs first to be at the public role, as tenant data isn't         # role role/tenant specific.
+        connection.set_role_to_public()
         hostname = self.hostname_from_request(request)
 
         domain_model = get_tenant_domain_model()
@@ -57,5 +57,5 @@ class TenantMainMiddleware(MIDDLEWARE_MIXIN):
         ContentType.objects.clear_cache()
 
         # Do we have a public-specific urlconf?
-        if hasattr(settings, 'PUBLIC_SCHEMA_URLCONF') and request.tenant.schema_name == get_public_schema_name():
+        if hasattr(settings, 'PUBLIC_SCHEMA_URLCONF') and request.tenant.role_name == get_public_role_name():
             request.urlconf = settings.PUBLIC_SCHEMA_URLCONF

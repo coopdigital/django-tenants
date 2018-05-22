@@ -21,7 +21,6 @@ setup(
         'django_tenants.postgresql_backend',
         'django_tenants.management',
         'django_tenants.management.commands',
-        'django_tenants.migration_executors',
         'django_tenants.templatetags',
         'django_tenants.test',
         'django_tenants.tests',
@@ -54,7 +53,7 @@ setup(
     ],
     install_requires=[
         'Django >= 1.8.0,<2.0.0',
-        'psycopg2',
+        'psycopg2 >= 2.5.4',
     ],
     zip_safe=False,
 )

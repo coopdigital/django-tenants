@@ -43,10 +43,10 @@ SHARED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'dts_test_app',
 )
 
 TENANT_APPS = (
-    'dts_test_app',
 )
 
 TENANT_MODEL = "customers.Client"  # app.Model

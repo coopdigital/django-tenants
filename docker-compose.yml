@@ -1,5 +1,7 @@
 postgres:
   image: postgres:latest
+  ports:
+    - "5432:5432"
 
 django-tenants-test:
   build: .

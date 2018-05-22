@@ -5,10 +5,8 @@ from django.db import connection, transaction
 from dts_test_app.models import DummyModel, ModelWithFkToPublicUser
 from django_tenants.test.cases import TenantTestCase
 from django_tenants.tests.testcases import BaseTestCase
-from django_tenants.utils import tenant_context, schema_context, schema_exists, get_tenant_model, get_public_schema_name, \
+from django_tenants.utils import tenant_context, role_context, schema_exists, get_tenant_model, get_public_role_name, \
     get_tenant_domain_model
-
-from django_tenants.migration_executors import get_executor
 
 
 class TenantDataAndSettingsTest(BaseTestCase):
@@ -28,7 +26,7 @@ class TenantDataAndSettingsTest(BaseTestCase):
         settings.INSTALLED_APPS = settings.SHARED_APPS + settings.TENANT_APPS
         cls.sync_shared()
 
-        cls.public_tenant = get_tenant_model()(schema_name=get_public_schema_name())
+        cls.public_tenant = get_tenant_model()(role_name=get_public_role_name())
         cls.public_tenant.save()
         cls.public_domain = get_tenant_domain_model()(tenant=cls.public_tenant, domain='test.com')
         cls.public_domain.save()
@@ -48,7 +46,7 @@ class TenantDataAndSettingsTest(BaseTestCase):
     def tearDown(self):
         from django_tenants.models import TenantMixin
 
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
 
         for c in self.created:
             if isinstance(c, TenantMixin):
@@ -58,69 +56,12 @@ class TenantDataAndSettingsTest(BaseTestCase):
 
         super(TenantDataAndSettingsTest, self).tearDown()
 
-    def test_tenant_schema_is_created(self):
-        """
-        When saving a tenant, it's schema should be created.
-        """
-        tenant = get_tenant_model()(schema_name='test')
-        tenant.save()
-
-        domain = get_tenant_domain_model()(tenant=tenant, domain='something.test.com')
-        domain.save()
-
-        self.assertTrue(schema_exists(tenant.schema_name))
-
-        self.created = [domain, tenant]
-
-    def test_tenant_schema_is_created_atomically(self):
-        """
-        When saving a tenant, it's schema should be created.
-        This should work in atomic transactions too.
-        """
-        executor = get_executor()
-        Tenant = get_tenant_model()
-
-        schema_name = 'test'
-
-        @transaction.atomic()
-        def atomically_create_tenant():
-            t = Tenant(schema_name=schema_name)
-            t.save()
-
-            self.created = [t]
-
-        if executor == 'simple':
-            atomically_create_tenant()
-
-            self.assertTrue(schema_exists(schema_name))
-        elif executor == 'multiprocessing':
-            # Unfortunately, it's impossible for the multiprocessing executor
-            # to assert atomic transactions when creating a tenant
-            with self.assertRaises(transaction.TransactionManagementError):
-                atomically_create_tenant()
-
-    def test_non_auto_sync_tenant(self):
-        """
-        When saving a tenant that has the flag auto_create_schema as
-        False, the schema should not be created when saving the tenant.
-        """
-
-        tenant = get_tenant_model()(schema_name='test')
-        tenant.auto_create_schema = False
-        tenant.save()
-
-        domain = get_tenant_domain_model()(tenant=tenant, domain='something.test.com')
-        domain.save()
-
-        self.assertFalse(schema_exists(tenant.schema_name))
-
-        self.created = [domain, tenant]
-
+    
     def test_sync_tenant(self):
         """
         When editing an existing tenant, all data should be kept.
         """
-        tenant = get_tenant_model()(schema_name='test')
+        tenant = get_tenant_model()(role_name='test')
         tenant.save()
 
         domain = get_tenant_domain_model()(tenant=tenant, domain='something.test.com')
@@ -134,7 +75,7 @@ class TenantDataAndSettingsTest(BaseTestCase):
         DummyModel(name="awesome!").save()
 
         # edit tenant
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
         tenant.domain_urls = ['example.com']
         tenant.save()
 
@@ -145,16 +86,16 @@ class TenantDataAndSettingsTest(BaseTestCase):
 
         self.created = [domain, tenant]
 
-    def test_switching_search_path(self):
-        tenant1 = get_tenant_model()(schema_name='tenant1')
+    def test_switching_role(self):
+        tenant1 = get_tenant_model()(role_name='tenant1')
         tenant1.save()
 
         domain1 = get_tenant_domain_model()(tenant=tenant1, domain='something.test.com')
         domain1.save()
 
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
 
-        tenant2 = get_tenant_model()(schema_name='tenant2')
+        tenant2 = get_tenant_model()(role_name='tenant2')
         tenant2.save()
 
         domain2 = get_tenant_domain_model()(tenant=tenant2, domain='example.com')
@@ -184,7 +125,7 @@ class TenantDataAndSettingsTest(BaseTestCase):
         self.created = [domain2, domain1, tenant2, tenant1]
 
     def test_switching_tenant_without_previous_tenant(self):
-        tenant = get_tenant_model()(schema_name='test')
+        tenant = get_tenant_model()(role_name='test')
         tenant.save()
 
         domain = get_tenant_domain_model()(tenant=tenant, domain='something.test.com')
@@ -195,7 +136,7 @@ class TenantDataAndSettingsTest(BaseTestCase):
             DummyModel(name="No exception please").save()
 
         connection.tenant = None
-        with schema_context(tenant.schema_name):
+        with role_context(tenant.role_name):
             DummyModel(name="Survived it!").save()
 
         self.created = [domain, tenant]
@@ -229,10 +170,10 @@ class BaseSyncTest(BaseTestCase):
         super(BaseSyncTest, self).setUp()
         # Django calls syncdb by default for the test database, but we want
         # a blank public schema for this set of tests.
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
         with connection.cursor() as cursor:
             cursor.execute('DROP SCHEMA %s CASCADE; CREATE SCHEMA %s;'
-                           % (get_public_schema_name(), get_public_schema_name(), ))
+                           % (get_public_role_name(), get_public_role_name(), ))
 
         self.sync_shared()
 
@@ -243,7 +184,7 @@ class TenantSyncTest(BaseSyncTest):
         Tests that if an app is in SHARED_APPS, it does not get synced to
         the a tenant schema.
         """
-        shared_tables = self.get_tables_list_in_schema(get_public_schema_name())
+        shared_tables = self.get_tables_list_in_schema(get_public_role_name())
         self.assertEqual(2+6+1+self.MIGRATION_TABLE_SIZE, len(shared_tables))
         self.assertNotIn('django_session', shared_tables)
 
@@ -252,17 +193,17 @@ class TenantSyncTest(BaseSyncTest):
         Tests that if an app is in TENANT_APPS, it does not get synced to
         the public schema.
         """
-        tenant = get_tenant_model()(schema_name='test')
+        tenant = get_tenant_model()(role_name='test')
         tenant.save()
 
         domain = get_tenant_domain_model()(tenant=tenant, domain='arbitrary.test.com')
         domain.save()
 
-        tenant_tables = self.get_tables_list_in_schema(tenant.schema_name)
+        tenant_tables = self.get_tables_list_in_schema(tenant.role_name)
         self.assertEqual(1+self.MIGRATION_TABLE_SIZE, len(tenant_tables))
         self.assertIn('django_session', tenant_tables)
 
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
         domain.delete()
         tenant.delete(force_drop=True)
 
@@ -284,14 +225,14 @@ class TestSyncTenantsWithAuth(BaseSyncTest):
         Tests that both SHARED_APPS and TENANT_APPS can have apps in common.
         In this case they should get synced to both tenant and public schemas.
         """
-        tenant = get_tenant_model()(schema_name='test')
+        tenant = get_tenant_model()(role_name='test')
         tenant.save()
 
         domain = get_tenant_domain_model()(tenant=tenant, domain='arbitrary.test.com')
         domain.save()
 
-        shared_tables = self.get_tables_list_in_schema(get_public_schema_name())
-        tenant_tables = self.get_tables_list_in_schema(tenant.schema_name)
+        shared_tables = self.get_tables_list_in_schema(get_public_role_name())
+        tenant_tables = self.get_tables_list_in_schema(tenant.role_name)
         self.assertEqual(2+6+1+1+self.MIGRATION_TABLE_SIZE, len(shared_tables))
         self.assertIn('django_session', shared_tables)
         self.assertEqual(1+self.MIGRATION_TABLE_SIZE, len(tenant_tables))
@@ -309,13 +250,13 @@ class TestSyncTenantsNoAuth(BaseSyncTest):
         Tests that even if content types is in SHARED_APPS, it's
         not required in TENANT_APPS.
         """
-        tenant = get_tenant_model()(schema_name='test')
+        tenant = get_tenant_model()(role_name='test')
         tenant.save()
         domain = get_tenant_domain_model()(tenant=tenant, domain='something.test.com')
         domain.save()
 
-        shared_tables = self.get_tables_list_in_schema(get_public_schema_name())
-        tenant_tables = self.get_tables_list_in_schema(tenant.schema_name)
+        shared_tables = self.get_tables_list_in_schema(get_public_role_name())
+        tenant_tables = self.get_tables_list_in_schema(tenant.role_name)
         self.assertEqual(2+1 + self.MIGRATION_TABLE_SIZE, len(shared_tables))
         self.assertIn('django_session', tenant_tables)
         self.assertEqual(1+self.MIGRATION_TABLE_SIZE, len(tenant_tables))
@@ -333,19 +274,19 @@ class SharedAuthTest(BaseTestCase):
         settings.TENANT_APPS = ('dts_test_app', )
         settings.INSTALLED_APPS = settings.SHARED_APPS + settings.TENANT_APPS
         self.sync_shared()
-        self.public_tenant = get_tenant_model()(schema_name=get_public_schema_name())
+        self.public_tenant = get_tenant_model()(role_name=get_public_role_name())
         self.public_tenant.save()
         self.public_domain = get_tenant_domain_model()(tenant=self.public_tenant, domain='test.com')
         self.public_domain.save()
 
         # Create a tenant
-        self.tenant = get_tenant_model()(schema_name='tenant')
+        self.tenant = get_tenant_model()(role_name='tenant')
         self.tenant.save()
         self.domain = get_tenant_domain_model()(tenant=self.tenant, domain='tenant.test.com')
         self.domain.save()
 
         # Create some users
-        with schema_context(get_public_schema_name()):  # this could actually also be executed inside a tenant
+        with role_context(get_public_role_name()):  # this could actually also be executed inside a tenant
             self.user1 = User(username='arbitrary-1', email="arb1@test.com")
             self.user1.save()
             self.user2 = User(username='arbitrary-2', email="arb2@test.com")
@@ -359,7 +300,7 @@ class SharedAuthTest(BaseTestCase):
             self.d2.save()
 
     def tearDown(self):
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
         self.public_domain.delete()
         self.public_tenant.delete()
         self.domain.delete()

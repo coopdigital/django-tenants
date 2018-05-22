@@ -9,7 +9,7 @@ try:
     from django.utils.six.moves import input
 except ImportError:
     input = raw_input
-from django_tenants.utils import get_tenant_model, get_public_schema_name
+from django_tenants.utils import get_tenant_model, get_public_role_name
 
 
 class BaseTenantCommand(BaseCommand):
@@ -40,7 +40,7 @@ class BaseTenantCommand(BaseCommand):
 
     def add_arguments(self, parser):
         super(BaseTenantCommand, self).add_arguments(parser)
-        parser.add_argument("-s", "--schema", dest="schema_name")
+        parser.add_argument("-s", "--schema", dest="role_name")
         parser.add_argument("-p", "--skip-public", dest="skip_public", action="store_true", default=False)
 
     def execute_command(self, tenant, command_name, *args, **options):
@@ -49,7 +49,7 @@ class BaseTenantCommand(BaseCommand):
         if verbosity >= 1:
             print()
             print(self.style.NOTICE("=== Switching to schema '")
-                  + self.style.SQL_TABLE(tenant.schema_name)
+                  + self.style.SQL_TABLE(tenant.role_name)
                   + self.style.NOTICE("' then calling %s:" % command_name))
 
         connection.set_tenant(tenant)
@@ -61,14 +61,14 @@ class BaseTenantCommand(BaseCommand):
         """
         Iterates a command over all registered schemata.
         """
-        if options['schema_name']:
+        if options['role_name']:
             # only run on a particular schema
             connection.set_schema_to_public()
-            self.execute_command(get_tenant_model().objects.get(schema_name=options['schema_name']), self.COMMAND_NAME,
+            self.execute_command(get_tenant_model().objects.get(role_name=options['role_name']), self.COMMAND_NAME,
                                  *args, **options)
         else:
             for tenant in get_tenant_model().objects.all():
-                if not (options['skip_public'] and tenant.schema_name == get_public_schema_name()):
+                if not (options['skip_public'] and tenant.role_name == get_public_role_name()):
                     self.execute_command(tenant, self.COMMAND_NAME, *args, **options)
 
 
@@ -77,7 +77,7 @@ class InteractiveTenantOption(object):
         super(InteractiveTenantOption, self).__init__(*args, **kwargs)
 
     def add_arguments(self, parser):
-        parser.add_argument("-s", "--schema", dest="schema_name", help="specify tenant schema")
+        parser.add_argument("-s", "--schema", dest="role_name", help="specify tenant schema")
 
     def get_tenant_from_options_or_interactive(self, **options):
         TenantModel = get_tenant_model()
@@ -88,20 +88,20 @@ class InteractiveTenantOption(object):
 To learn how create a tenant, see:
 https://django-tenants.readthedocs.org/en/latest/use.html#creating-a-tenant""")
 
-        if options.get('schema_name'):
-            tenant_schema = options['schema_name']
+        if options.get('role_name'):
+            tenant_schema = options['role_name']
         else:
             while True:
                 tenant_schema = input("Enter Tenant Schema ('?' to list schemas): ")
                 if tenant_schema == '?':
-                    print('\n'.join(["%s" % t.schema_name for t in all_tenants]))
+                    print('\n'.join(["%s" % t.role_name for t in all_tenants]))
                 else:
                     break
 
-        if tenant_schema not in [t.schema_name for t in all_tenants]:
+        if tenant_schema not in [t.role_name for t in all_tenants]:
             raise CommandError("Invalid tenant schema, '%s'" % (tenant_schema,))
 
-        return TenantModel.objects.get(schema_name=tenant_schema)
+        return TenantModel.objects.get(role_name=tenant_schema)
 
 
 class TenantWrappedCommand(InteractiveTenantOption, BaseCommand):
@@ -137,23 +137,23 @@ class SyncCommon(BaseCommand):
                             help='Tells Django to populate only tenant applications.')
         parser.add_argument('--shared', action='store_true', dest='shared', default=False,
                             help='Tells Django to populate only shared applications.')
-        parser.add_argument("-s", "--schema", dest="schema_name")
+        parser.add_argument("-s", "--schema", dest="role_name")
         parser.add_argument('--executor', action='store', dest='executor', default=None,
                             help='Executor to be used for running migrations [standard|multiprocessing]')
 
     def handle(self, *args, **options):
         self.sync_tenant = options.get('tenant')
         self.sync_public = options.get('shared')
-        self.schema_name = options.get('schema_name')
+        self.role_name = options.get('role_name')
         self.executor = options.get('executor')
         self.installed_apps = settings.INSTALLED_APPS
         self.args = args
         self.options = options
 
-        if self.schema_name:
+        if self.role_name:
             if self.sync_public:
                 raise CommandError("schema should only be used with the --tenant switch.")
-            elif self.schema_name == get_public_schema_name():
+            elif self.role_name == get_public_role_name():
                 self.sync_public = True
             else:
                 self.sync_tenant = True

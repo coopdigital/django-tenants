@@ -4,7 +4,7 @@ from django.conf import settings
 from importlib import import_module
 
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django_tenants.utils import get_public_schema_name, get_limit_set_calls
+from django_tenants.utils import get_public_role_name, get_limit_set_calls
 from django_tenants.postgresql_backend.introspection import DatabaseSchemaIntrospection
 import django.db.utils
 import psycopg2
@@ -33,12 +33,12 @@ def _check_identifier(identifier):
         raise ValidationError("Invalid string used for the identifier.")
 
 
-def _is_valid_schema_name(name):
-    return _is_valid_identifier(name) and not SQL_SCHEMA_NAME_RESERVED_RE.match(name)
+def _is_valid_role_name(name):
+    # TODO: Implement restrictions/validation on role name (e.g. no spaces or special characters) 
+    return True 
 
-
-def _check_schema_name(name):
-    if not _is_valid_schema_name(name):
+def _check_role_name(name):
+    if not _is_valid_role_name(name):
         raise ValidationError("Invalid string used for the schema name.")
 
 
@@ -52,13 +52,13 @@ class DatabaseWrapper(original_backend.DatabaseWrapper):
     def __init__(self, *args, **kwargs):
         self.search_path_set = None
         self.tenant = None
-        self.schema_name = None
+        self.role_name = None
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
 
         # Use a patched version of the DatabaseIntrospection that only returns the table list for the
         # currently selected schema.
         self.introspection = DatabaseSchemaIntrospection(self)
-        self.set_schema_to_public()
+        self.set_role_to_public()
 
     def close(self):
         self.search_path_set = False
@@ -66,42 +66,42 @@ class DatabaseWrapper(original_backend.DatabaseWrapper):
 
     def set_tenant(self, tenant, include_public=True):
         """
-        Main API method to current database schema,
+        Main API method to current database role,
         but it does not actually modify the db connection.
         """
         self.tenant = tenant
-        self.schema_name = tenant.schema_name
-        self.include_public_schema = include_public
-        self.set_settings_schema(self.schema_name)
+        self.role_name = tenant.role_name
+        self.include_public_role = include_public
+        self.set_settings_role(self.role_name)
         self.search_path_set = False
 
-    def set_schema(self, schema_name, include_public=True):
+    def set_role(self, role_name, include_public=True):
         """
-        Main API method to current database schema,
+        Main API method to current database role,
         but it does not actually modify the db connection.
         """
-        self.tenant = FakeTenant(schema_name=schema_name)
-        self.schema_name = schema_name
-        self.include_public_schema = include_public
-        self.set_settings_schema(schema_name)
+        self.tenant = FakeTenant(role_name=role_name)
+        self.role_name = role_name
+        self.include_public_role = include_public
+        self.set_settings_role(role_name)
         self.search_path_set = False
 
-    def set_schema_to_public(self):
+    def set_role_to_public(self):
         """
-        Instructs to stay in the common 'public' schema.
+        Instructs to stay in the common 'public' role.
         """
-        self.tenant = FakeTenant(schema_name=get_public_schema_name())
-        self.schema_name = get_public_schema_name()
-        self.set_settings_schema(self.schema_name)
+        self.tenant = FakeTenant(role_name=get_public_role_name())
+        self.role_name = get_public_role_name()
+        self.set_settings_role(self.role_name)
         self.search_path_set = False
 
-    def set_settings_schema(self, schema_name):
-        self.settings_dict['SCHEMA'] = schema_name
+    def set_settings_role(self, role_name):
+        self.settings_dict['ROLE'] = role_name
 
-    def get_schema(self):
-        warnings.warn("connection.get_schema() is deprecated, use connection.schema_name instead.",
+    def get_role(self):
+        warnings.warn("connection.get_role() is deprecated, use connection.role_name instead.",
                       category=DeprecationWarning)
-        return self.schema_name
+        return self.role_name
 
     def get_tenant(self):
         warnings.warn("connection.get_tenant() is deprecated, use connection.tenant instead.",
@@ -122,25 +122,25 @@ class DatabaseWrapper(original_backend.DatabaseWrapper):
         # optionally limit the number of executions - under load, the execution
         # of `set search_path` can be quite time consuming
         if (not get_limit_set_calls()) or not self.search_path_set or self._previous_cursor != cursor:
-            # Store the cursor pointer to check if it has changed since we 
+            # Store the cursor pointer to check if it has changed since we
             # last validated.
             self._previous_cursor = cursor
             # Actual search_path modification for the cursor. Database will
             # search schemata from left to right when looking for the object
             # (table, index, sequence, etc.).
-            if not self.schema_name:
+            if not self.role_name:
                 raise ImproperlyConfigured("Database schema not set. Did you forget "
-                                           "to call set_schema() or set_tenant()?")
-            _check_schema_name(self.schema_name)
-            public_schema_name = get_public_schema_name()
+                                           "to call set_role() or set_tenant()?")
+            _check_role_name(self.role_name)
+            public_role_name = get_public_role_name()
             search_paths = []
 
-            if self.schema_name == public_schema_name:
-                search_paths = [public_schema_name]
-            elif self.include_public_schema:
-                search_paths = [self.schema_name, public_schema_name]
+            if self.role_name == public_role_name:
+                search_paths = [public_role_name]
+            elif self.include_public_role:
+                search_paths = [self.role_name, public_role_name]
             else:
-                search_paths = [self.schema_name]
+                search_paths = [self.role_name]
 
             search_paths.extend(EXTRA_SEARCH_PATHS)
 
@@ -169,7 +169,7 @@ class DatabaseWrapper(original_backend.DatabaseWrapper):
 class FakeTenant:
     """
     We can't import any db model in a backend (apparently?), so this class is used
-    for wrapping schema names in a tenant-like structure.
+    for wrapping role names in a tenant-like structure.
     """
-    def __init__(self, schema_name):
-        self.schema_name = schema_name
+    def __init__(self, role_name):
+        self.role_name = role_name

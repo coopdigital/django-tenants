@@ -2,7 +2,7 @@ from django.core.management import call_command
 from django.conf import settings
 from django.db import connection
 from django.test import TestCase
-from django_tenants.utils import get_tenant_model, get_tenant_domain_model, get_public_schema_name
+from django_tenants.utils import get_tenant_model, get_tenant_domain_model, get_public_role_name
 
 ALLOWED_TEST_DOMAIN = '.test.com'
 
@@ -35,7 +35,7 @@ class TenantTestCase(TestCase):
     def setUpClass(cls):
         cls.sync_shared()
         cls.add_allowed_test_domain()
-        cls.tenant = get_tenant_model()(schema_name=cls.get_test_schema_name())
+        cls.tenant = get_tenant_model()(role_name=cls.get_test_role_name())
         cls.setup_tenant(cls.tenant)
         cls.tenant.save(verbosity=cls.get_verbosity())
 
@@ -49,7 +49,7 @@ class TenantTestCase(TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
         cls.domain.delete()
         cls.tenant.delete(force_drop=True)
         cls.remove_allowed_test_domain()
@@ -72,7 +72,7 @@ class TenantTestCase(TestCase):
     @classmethod
     def sync_shared(cls):
         call_command('migrate_schemas',
-                     schema_name=get_public_schema_name(),
+                     role_name=get_public_role_name(),
                      interactive=False,
                      verbosity=0)
 
@@ -81,7 +81,7 @@ class TenantTestCase(TestCase):
         return 'tenant.test.com'
 
     @classmethod
-    def get_test_schema_name(cls):
+    def get_test_role_name(cls):
         return 'test'
 
 
@@ -111,7 +111,7 @@ class FastTenantTestCase(TenantTestCase):
 
     @classmethod
     def setup_test_tenant_and_domain(cls):
-        cls.tenant = get_tenant_model()(schema_name=cls.get_test_schema_name())
+        cls.tenant = get_tenant_model()(role_name=cls.get_test_role_name())
         cls.setup_tenant(cls.tenant)
         cls.tenant.save(verbosity=cls.get_verbosity())
 
@@ -126,9 +126,9 @@ class FastTenantTestCase(TenantTestCase):
     def setUpClass(cls):
         tenant_model = get_tenant_model()
 
-        test_schema_name = cls.get_test_schema_name()
-        if tenant_model.objects.filter(schema_name=test_schema_name).exists():
-            cls.tenant = tenant_model.objects.filter(schema_name=test_schema_name).first()
+        test_role_name = cls.get_test_role_name()
+        if tenant_model.objects.filter(role_name=test_role_name).exists():
+            cls.tenant = tenant_model.objects.filter(role_name=test_role_name).first()
             cls.use_existing_tenant()
         else:
             cls.setup_test_tenant_and_domain()
@@ -137,7 +137,7 @@ class FastTenantTestCase(TenantTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
 
     def _fixture_teardown(self):
         if self.flush_data():

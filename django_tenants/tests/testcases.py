@@ -3,7 +3,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.test import TransactionTestCase
 
-from django_tenants.utils import get_public_schema_name
+from django_tenants.utils import get_public_role_name
 
 
 class BaseTestCase(TransactionTestCase):
@@ -28,7 +28,7 @@ class BaseTestCase(TransactionTestCase):
         super(BaseTestCase, cls).setUpClass()
 
     def setUp(self):
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
         super(BaseTestCase, self).setUp()
 
     @classmethod
@@ -38,17 +38,17 @@ class BaseTestCase(TransactionTestCase):
             settings.ALLOWED_HOSTS.remove('.test.com')
 
     @classmethod
-    def get_tables_list_in_schema(cls, schema_name):
+    def get_tables_list_in_schema(cls, role_name):
         cursor = connection.cursor()
         sql = """SELECT table_name FROM information_schema.tables
               WHERE table_schema = %s"""
-        cursor.execute(sql, (schema_name, ))
+        cursor.execute(sql, (role_name, ))
         return [row[0] for row in cursor.fetchall()]
 
 
     @classmethod
     def sync_shared(cls):
         call_command('migrate_schemas',
-                     schema_name=get_public_schema_name(),
+                     role_name=get_public_role_name(),
                      interactive=False,
                      verbosity=0)

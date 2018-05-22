@@ -1,12 +1,11 @@
-FROM ubuntu:14.04
-MAINTAINER Przemek Kamiński <cgenie@gmail.com>
+FROM ubuntu:trusty
 
 RUN apt-get update && apt-get -y upgrade
 
-RUN apt-get -y install python-pip python-psycopg2 git
+RUN apt-get -y install python3-pip python3-psycopg2 git libpq-dev
 
 WORKDIR /code
 
 ADD . /code
 
-RUN python setup.py develop
+RUN python3 setup.py develop

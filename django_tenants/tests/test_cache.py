@@ -7,7 +7,7 @@ class CacheHelperTestCase(TenantTestCase):
     def test_make_key(self):
         key = make_key(key='foo', key_prefix='', version=1)
         tenant_prefix = key.split(':')[0]
-        self.assertEqual(self.tenant.schema_name, tenant_prefix)
+        self.assertEqual(self.tenant.role_name, tenant_prefix)
 
     def test_reverse_key(self):
         key = 'foo'

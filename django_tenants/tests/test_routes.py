@@ -3,7 +3,7 @@ from django.test.client import RequestFactory
 
 from django_tenants.middleware import TenantMiddleware
 from django_tenants.tests.testcases import BaseTestCase
-from django_tenants.utils import get_tenant_model, get_tenant_domain_model, get_public_schema_name
+from django_tenants.utils import get_tenant_model, get_tenant_domain_model, get_public_role_name
 
 
 class RoutesTestCase(BaseTestCase):
@@ -18,7 +18,7 @@ class RoutesTestCase(BaseTestCase):
         settings.INSTALLED_APPS = settings.SHARED_APPS + settings.TENANT_APPS
         cls.available_apps = settings.INSTALLED_APPS
         cls.sync_shared()
-        cls.public_tenant = get_tenant_model()(schema_name=get_public_schema_name())
+        cls.public_tenant = get_tenant_model()(role_name=get_public_role_name())
         cls.public_tenant.save()
         cls.public_domain = get_tenant_domain_model()(domain='test.com', tenant=cls.public_tenant)
         cls.public_domain.save()
@@ -27,7 +27,7 @@ class RoutesTestCase(BaseTestCase):
     def tearDownClass(cls):
         from django.db import connection
 
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
 
         cls.public_domain.delete()
         cls.public_tenant.delete()
@@ -40,7 +40,7 @@ class RoutesTestCase(BaseTestCase):
         self.tm = TenantMiddleware()
 
         self.tenant_domain = 'tenant.test.com'
-        self.tenant = get_tenant_model()(schema_name='test')
+        self.tenant = get_tenant_model()(role_name='test')
         self.tenant.save()
         self.domain = get_tenant_domain_model()(tenant=self.tenant, domain=self.tenant_domain)
         self.domain.save()
@@ -48,7 +48,7 @@ class RoutesTestCase(BaseTestCase):
     def tearDown(self):
         from django.db import connection
 
-        connection.set_schema_to_public()
+        connection.set_role_to_public()
 
         self.domain.delete()
         self.tenant.delete(force_drop=True)

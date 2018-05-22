@@ -21,5 +21,9 @@ pushd dts_test_project
 EXECUTORS=( standard multiprocessing )
 
 for executor in "${EXECUTORS[@]}"; do
-    EXECUTOR=$executor python manage.py test django_tenants.tests
+    if [ "$KEEPDB" = true ] ; then
+        EXECUTOR=$executor python3 manage.py test -k django_tenants.tests
+    else
+        EXECUTOR=$executor python3 manage.py test django_tenants.tests
+    fi
 done
